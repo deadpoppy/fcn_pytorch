@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="26589970-f867-455c-ad54-1c640c40583f" name="fcn" url="http://10.42.177.10">
+        <fileTransfer host="10.42.177.10" port="31837" rootFolder="/root/" accessType="SFTP">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+          <option name="port" value="31837" />
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>
