@@ -128,8 +128,11 @@ def train(epoch, train_loader, optimizer, criterion, net):
 
 
 
-
-net = fcn(num_classes)
+import unet
+if netflag=='unet':
+    net =unet.UNet(n_classes=num_classes, padding=True, up_mode='upsample')
+else:
+    net = fcn(num_classes)
 net = net.cuda()
 
 # optimizer = optim.SGD(net.parameters(), lr=1e-2, weight_decay=1e-4)
