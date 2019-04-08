@@ -10,9 +10,10 @@ from torch.utils.data import Dataset, DataLoader
 from PIL import Image
 from torchvision import transforms as tfs
 from datetime import datetime
-
+import torchvision.models as model_zoo
 from config import *
-
+import unet
+num_classes =len(classes)
 
 
 # 定义 bilinear kernel
@@ -32,15 +33,15 @@ def bilinear_kernel(in_channels, out_channels, kernel_size):
     return torch.from_numpy(weight)
 
 
-import torchvision.models as model_zoo
-pretrained_net=model_zoo.resnet34(pretrained=True)
-num_classes =len(classes)
+
+
+
 
 
 class fcn(nn.Module):
     def __init__(self, num_classes):
         super(fcn, self).__init__()
-
+        pretrained_net = model_zoo.resnet34(pretrained=True)
         self.stage1 = nn.Sequential(*list(pretrained_net.children())[:-4])  # 第一段
         self.stage2 = list(pretrained_net.children())[-4]  # 第二段
         self.stage3 = list(pretrained_net.children())[-3]  # 第三段
@@ -128,80 +129,84 @@ def train(epoch, train_loader, optimizer, criterion, net):
 
 
 
-import unet
-if netflag=='unet':
-    net =unet.UNet(n_classes=num_classes, padding=True, up_mode='upsample')
-else:
-    net = fcn(num_classes)
-net = net.cuda()
+if __name__ == '__main__':
 
-# optimizer = optim.SGD(net.parameters(), lr=1e-2, weight_decay=1e-4)
+    print('start choose base net!')
+    if netflag=='unet':
+        net =unet.UNet(n_classes=num_classes, padding=True, up_mode='upsample')
+    else:
+        net = fcn(num_classes)
+    net = net.cuda()
+    print('set up net correctelly')
 
-# 实例化数据集
+    # optimizer = optim.SGD(net.parameters(), lr=1e-2, weight_decay=1e-4)
 
-voc_train = VOCSegDataset(True, input_shape, img_transforms)
-voc_test = VOCSegDataset(False, input_shape, img_transforms)
+    # 实例化数据集
 
-train_loader = DataLoader(voc_train, batch_size=24, shuffle=True, num_workers=4)
-val_loader = DataLoader(voc_test, batch_size=16, num_workers=4)
+    voc_train = VOCSegDataset(True, input_shape, img_transforms)
+    voc_test = VOCSegDataset(False, input_shape, img_transforms)
+
+    train_loader = DataLoader(voc_train, batch_size=24, shuffle=True, num_workers=4)
+    val_loader = DataLoader(voc_test, batch_size=16, num_workers=4)
 
 
-# models
-criterion = nn.CrossEntropyLoss(ignore_index=-1).cuda()
+    # models
+    criterion = nn.CrossEntropyLoss(ignore_index=-1).cuda()
 
-optimizer = torch.optim.Adam(net.parameters(),  1e-4,weight_decay=5e-4)
+    optimizer = torch.optim.Adam(net.parameters(),  1e-4,weight_decay=5e-4)
 
-if resume is not None:
-    net.load_state_dict(torch.load(resume).state_dict())
-net=torch.nn.DataParallel(net)
-for epoch in range(10000):
-    net=net.train()
+    if resume is not None:
+        net.load_state_dict(torch.load(resume).state_dict())
+    if dataparallel:
+        net=torch.nn.DataParallel(net)
+    for epoch in range(10000):
+        net=net.train()
 
-    train(epoch, train_loader, optimizer, criterion, net)
+        train(epoch, train_loader, optimizer, criterion, net)
 
-    if val_flag==True and epoch%5==0:
-        prev_time = datetime.now()
-        net = net.eval()
-        eval_loss = 0
-        eval_acc = 0
-        eval_acc_cls = 0
-        eval_mean_iu = 0
-        eval_fwavacc = 0
-        for data in val_loader:
-            im = data[0].cuda()
-            label = data[1].cuda()
-            # forward
-            out = net(im)
-            # out = F.log_softmax(out, dim=1)
-            loss = criterion(out, label)
-            eval_loss += loss.data.item()
+        if val_flag==True and epoch%5==0:
+            prev_time = datetime.now()
+            net = net.eval()
+            eval_loss = 0
+            eval_acc = 0
+            eval_acc_cls = 0
+            eval_mean_iu = 0
+            eval_fwavacc = 0
+            for data in val_loader:
+                im = data[0].cuda()
+                label = data[1].cuda()
+                # forward
+                out = net(im)
+                # out = F.log_softmax(out, dim=1)
+                loss = criterion(out, label)
+                eval_loss += loss.data.item()
 
-            label_pred = out.max(dim=1)[1].data.cpu().numpy()
-            label_true = label.data.cpu().numpy()
-            for lbt, lbp in zip(label_true, label_pred):
-                acc, acc_cls, mean_iu, fwavacc = label_accuracy_score(lbt, lbp, num_classes)
-                eval_acc += acc
-                eval_acc_cls += acc_cls
-                eval_mean_iu += mean_iu
-                eval_fwavacc += fwavacc
+                label_pred = out.max(dim=1)[1].data.cpu().numpy()
+                label_true = label.data.cpu().numpy()
+                for lbt, lbp in zip(label_true, label_pred):
+                    acc, acc_cls, mean_iu, fwavacc = label_accuracy_score(lbt, lbp, num_classes)
+                    eval_acc += acc
+                    eval_acc_cls += acc_cls
+                    eval_mean_iu += mean_iu
+                    eval_fwavacc += fwavacc
 
-        cur_time = datetime.now()
-        h, remainder = divmod((cur_time - prev_time).seconds, 3600)
-        m, s = divmod(remainder, 60)
-        epoch_str = ('Epoch: {}, \
-        Valid Loss: {:.5f}, Valid Acc: {:.5f}, Valid Mean IU: {:.5f} '.format(
-            epoch,
-               eval_loss / len(val_loader), eval_acc / len(val_loader), eval_mean_iu / len(val_loader)))
-        time_str = 'Time: {:.0f}:{:.0f}:{:.0f}'.format(h, m, s)
-        print(epoch_str + time_str + ' lr: {}'.format('0.0001'))
-    print(epoch%10)
-    # if epoch%40==0:
-    #     print('start saving')
-    #     torch.save(net,'./weight/fcn{}.pth'.format(epoch))
-    #     print('save correctly')
-        # net=torch.load('./weight/fcn{}.pth'.format(epoch)).cuda()
-        # print('load correctly')
-        # print(list(net.children()))
+            cur_time = datetime.now()
+            h, remainder = divmod((cur_time - prev_time).seconds, 3600)
+            m, s = divmod(remainder, 60)
+            epoch_str = ('Epoch: {}, \
+            Valid Loss: {:.5f}, Valid Acc: {:.5f}, Valid Mean IU: {:.5f} '.format(
+                epoch,
+                   eval_loss / len(val_loader), eval_acc / len(val_loader), eval_mean_iu / len(val_loader)))
+            time_str = 'Time: {:.0f}:{:.0f}:{:.0f}'.format(h, m, s)
+            print(epoch_str + time_str + ' lr: {}'.format('0.0001'))
+        print(epoch%10)
+        # if epoch%40==0:
+        #     print('start saving')
+        #     torch.save(net,'./weight/fcn{}.pth'.format(epoch))
+        #     print('save correctly')
+            # net=torch.load('./weight/fcn{}.pth'.format(epoch)).cuda()
+            # print('load correctly')
+            # print(list(net.children()))
 
 
 
