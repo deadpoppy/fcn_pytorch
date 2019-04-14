@@ -15,8 +15,8 @@ colormap = [[0,0,0],[128,0,0],[0,128,0], [128,128,0], [0,0,128],
             [0,192,0],[128,192,0],[0,64,128]]
 
 netflag='unet'#unet or fcn
-dataparallel=False
+dataparallel=True
 val_flag=False
 input_shape = (320, 480)
 voc_root='/root/VOC2012'
-resume=""
+resume=None

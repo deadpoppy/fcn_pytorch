@@ -146,8 +146,8 @@ if __name__ == '__main__':
     voc_train = VOCSegDataset(True, input_shape, img_transforms)
     voc_test = VOCSegDataset(False, input_shape, img_transforms)
 
-    train_loader = DataLoader(voc_train, batch_size=24, shuffle=True, num_workers=4)
-    val_loader = DataLoader(voc_test, batch_size=16, num_workers=4)
+    train_loader = DataLoader(voc_train, batch_size=8, shuffle=True, num_workers=4)
+    val_loader = DataLoader(voc_test, batch_size=8, num_workers=4)
 
 
     # models
